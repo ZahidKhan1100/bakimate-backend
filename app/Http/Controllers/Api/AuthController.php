@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Auth\AuthenticateAppleUserAction;
 use App\Actions\Auth\AuthenticateGoogleUserAction;
+use App\Actions\Auth\DeleteUserAccountAction;
 use App\Actions\Auth\RegisterEmailUserAction;
 use App\Actions\Auth\SendVerificationEmailMailgunAction;
 use App\Http\Controllers\Controller;
@@ -13,8 +14,7 @@ use App\Http\Requests\EmailRegisterRequest;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\GoogleLoginRequest;
 use App\Http\Requests\ResetPasswordRequest;
-use App\Models\User;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 
@@ -169,6 +169,27 @@ class AuthController extends Controller
         }
 
         return $this->authResponse($user, 'mobile-demo');
+    }
+
+    /**
+     * Permanently delete the authenticated user's account (owned shops, ledger rows via FK cascade).
+     */
+    public function destroyAccount(Request $request, DeleteUserAccountAction $action): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user instanceof User, 401);
+
+        try {
+            $action->execute($user);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Your account and shop data were permanently deleted.',
+        ]);
     }
 
     private function registrationPendingResponse(User $user): JsonResponse

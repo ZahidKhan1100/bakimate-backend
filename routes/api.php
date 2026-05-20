@@ -33,6 +33,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::patch('/shop', [ShopProfileController::class, 'update']);
     Route::post('/shop/duitnow-qr', [ShopDuitNowQrController::class, 'store']);
     Route::delete('/shop/duitnow-qr', [ShopDuitNowQrController::class, 'destroy']);
+    Route::delete('/auth/account', [AuthController::class, 'destroyAccount'])->middleware('throttle:3,1440');
 
     Route::get('/customers', [CustomerController::class, 'index']);
     Route::get('/customers/{customerId}', [CustomerController::class, 'show']);
