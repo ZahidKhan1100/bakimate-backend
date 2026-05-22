@@ -14,6 +14,8 @@ use App\Http\Requests\EmailRegisterRequest;
 use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\GoogleLoginRequest;
 use App\Http\Requests\ResetPasswordRequest;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
