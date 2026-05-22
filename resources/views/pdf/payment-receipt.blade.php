@@ -3,97 +3,142 @@
 <head>
     <meta charset="utf-8">
     <title>Payment receipt — {{ $customer->name }}</title>
-    <style>
-        @page { margin: 18mm; }
-        body {
-            font-family: DejaVu Sans, sans-serif;
-            font-size: 11px;
-            color: #0f172a;
-            margin: 0;
-        }
-        .header { border-bottom: 2px solid #15803d; padding-bottom: 12px; margin-bottom: 16px; }
-        h1 { font-size: 20px; margin: 0 0 4px; color: #15803d; }
-        .meta { font-size: 10px; color: #64748b; }
-        .grid { width: 100%; margin-top: 14px; }
-        .grid td { vertical-align: top; width: 50%; padding: 0 8px 0 0; }
-        .box { border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px 12px; background: #f8fafc; }
-        .box h2 { font-size: 11px; margin: 0 0 6px; color: #334155; text-transform: uppercase; }
-        table.lines { width: 100%; border-collapse: collapse; margin-top: 18px; }
-        table.lines th, table.lines td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; }
-        table.lines th { background: #f1f5f9; font-size: 10px; text-transform: uppercase; }
-        .num { text-align: right; font-weight: bold; }
-        .total-row td { border-top: 2px solid #15803d; font-size: 13px; }
-        .footer { margin-top: 28px; font-size: 10px; color: #64748b; }
-        .sign { margin-top: 36px; }
-        .sign-line { border-top: 1px solid #94a3b8; width: 220px; margin-top: 40px; padding-top: 4px; }
-    </style>
+    @include('pdf.partials.so-form-styles')
 </head>
 <body>
-    <div class="header">
-        <h1>PAYMENT RECEIPT</h1>
-        <p class="meta">BakiMate · {{ $shopName }} · Issued {{ $issuedAt }}</p>
-        <p class="meta">Receipt #{{ $receiptNo }} · {{ $currencyCode }}</p>
-    </div>
-
-    <table class="grid">
+    @php /** @var \App\Models\Customer $customer */ @endphp
+    <table style="width:100%;border-collapse:collapse;">
         <tr>
-            <td>
-                <div class="box">
-                    <h2>Shop</h2>
-                    <strong>{{ $shopName }}</strong><br>
-                    @if($shopLocation)
-                        {{ $shopLocation }}<br>
-                    @endif
-                    @if($shopContact)
-                        {{ $shopContact }}<br>
-                    @endif
-                    @if($paymentInstructions)
-                        <span style="font-size:9px;">{{ $paymentInstructions }}</span>
+            <td style="width:58%;vertical-align:top;">
+                <div class="seller-name">{{ strtoupper((string) $shopName) }}</div>
+                <div class="muted">
+                    @foreach($shopLocationLines as $line)
+                        {{ $line }}<br>
+                    @endforeach
+                    @if($shopContact !== '')
+                        TEL:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ $shopContact }}<br>
                     @endif
                 </div>
             </td>
-            <td>
-                <div class="box">
-                    <h2>Customer</h2>
-                    <strong>{{ $customer->name }}</strong><br>
-                    @if($customer->phone)
-                        {{ $customer->phone }}<br>
-                    @endif
-                </div>
+            <td style="width:42%;vertical-align:top;">
+                <table class="meta-table" style="margin-top:0;">
+                    <tr>
+                        <td colspan="2" style="font-size:15px;font-weight:bold;text-transform:uppercase;text-align:right;padding-bottom:4px;">
+                            PAYMENT RECEIPT
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label r">RECEIPT NO.&nbsp;&nbsp;</td>
+                        <td class="meta-val"><strong>{{ $receiptNo }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label r">DATE&nbsp;&nbsp;</td>
+                        <td class="meta-val">{{ $docDate }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label r">PAGE&nbsp;&nbsp;</td>
+                        <td class="meta-val upper">{{ $pageLabel ?? '1 OF 1' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label r">CURRENCY&nbsp;&nbsp;</td>
+                        <td class="meta-val">{{ $currencyCode }}</td>
+                    </tr>
+                    <tr>
+                        <td class="meta-label r">CUSTOMER #&nbsp;&nbsp;</td>
+                        <td class="meta-val">{{ $customerRef }}</td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
+
+    <div class="box" style="margin-top:10px;">
+        <div class="box-title upper">Received from</div>
+        <strong>{{ strtoupper((string) $customer->name) }}</strong><br>
+        ADDRESS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: —
+        @if($customer->phone)
+            <br>TEL.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: {{ $customer->phone }}
+        @endif
+    </div>
 
     <table class="lines">
         <thead>
-        <tr>
-            <th>Description</th>
-            <th class="num">Amount ({{ $currencyCode }})</th>
-        </tr>
+            <tr>
+                <th style="width:3%;">NO</th>
+                <th style="width:13%;">ITEM CODE</th>
+                <th style="width:auto;">DESCRIPTION</th>
+                <th style="width:6%;">QTY</th>
+                <th style="width:7%;">UOM</th>
+                <th style="width:10%;">U.PRICE<br>({{ $currencyCode }})</th>
+                <th style="width:10%;">DISCOUNT<br>({{ $currencyCode }})</th>
+                <th style="width:10%;">AMOUNT<br>({{ $currencyCode }})</th>
+            </tr>
         </thead>
         <tbody>
-        <tr>
-            <td>
-                Payment received (against udhaar / balance)
-                @if($note)
-                    <br><span style="color:#64748b;font-size:10px;">Note: {{ $note }}</span>
-                @endif
-            </td>
-            <td class="num">{{ $amountFormatted }}</td>
-        </tr>
-        <tr class="total-row">
-            <td><strong>Outstanding balance after this payment</strong></td>
-            <td class="num">{{ $balanceAfterFormatted }}</td>
-        </tr>
+            <tr>
+                <td class="c">1</td>
+                <td>{{ $itemCode }}</td>
+                <td>{!! $descriptionHtml !!}</td>
+                <td class="c">{{ $qtyFormatted }}</td>
+                <td class="c">{{ $uom !== '' ? $uom : '-' }}</td>
+                <td class="r">{{ $unitPriceFormatted }}</td>
+                <td class="r">{{ $discountFormatted }}</td>
+                <td class="r">{{ $amountFormatted }}</td>
+            </tr>
         </tbody>
     </table>
 
-    <div class="footer">
-        This document is generated for your records. Amounts are in {{ $currencyCode }}; minor units were converted for display.
-    </div>
+    <table class="totals-wrap">
+        <tr>
+            <td style="width:48%;vertical-align:top;padding-top:0;">
+                <div class="words-box">
+                    <div class="words-label upper">Ringgit Malaysia Amount Received in Words:</div>
+                    @if(($amountWords ?? '') !== '')
+                        <strong class="upper">{{ $amountWords }}</strong>
+                    @else
+                        <span class="muted">—</span>
+                    @endif
+                </div>
+            </td>
+            <td style="width:52%;vertical-align:top;">
+                <table class="totals">
+                    <tr>
+                        <td class="lab r">AMOUNT RECEIVED&nbsp;&nbsp;</td>
+                        <td class="r" style="width:38%;"><strong>{{ $totalDocumentFormatted }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td class="lab r">OUTSTANDING BALANCE AFTER PAYMENT&nbsp;&nbsp;</td>
+                        <td class="r"><strong>{{ $balanceAfterFormatted }}</strong></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
 
-    <div class="sign">
-        <div class="sign-line">Authorized signature / shop stamp</div>
+    @if(count($paymentInstructionsLines ?? []) > 0)
+        <div class="bank-box muted" style="margin-top:10px;">
+            <div class="upper" style="font-weight:bold;margin-bottom:4px;color:#000;">PAYMENT / BANK DETAILS:</div>
+            @foreach($paymentInstructionsLines as $pline)
+                {{ $pline }}@if(!$loop->last)<br>@endif
+            @endforeach
+        </div>
+    @endif
+
+    <div class="terms muted">
+        <strong class="upper" style="color:#000;">ACKNOWLEDGEMENT:</strong>
+        <ol type="1">
+            <li>Payment credited to the customer ledger in {{ $currencyCode }}. Retain this receipt together with banking proof where applicable.</li>
+            <li>Recorded through BakiMate for {{ $shopName }}.</li>
+            <li>For discrepancies, contact the issuing shop with transaction reference {{ $receiptNo }}.</li>
+        </ol>
+        <div class="eoe">E. &amp; O.E.</div>
+        <div class="sign-block">
+            <div class="sign-for">For&nbsp;&nbsp;<strong>{{ strtoupper((string) $shopName) }}</strong></div>
+            <div class="sign-line">AUTHORISED SIGNATURE / SHOP CHOP</div>
+        </div>
+        <div class="water muted">
+            BakiMate · Printed {{ $issuedAt }} {{ config('app.timezone') }} · {{ $receiptNo }}
+        </div>
     </div>
 </body>
 </html>

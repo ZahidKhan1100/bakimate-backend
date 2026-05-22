@@ -2,16 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Models\Shop;
+use App\Services\RevenueCatWebhookProcessor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 /**
- * Parses RevenueCat / Stripe webhook payloads and updates shop.subscription_expires_at.
- * Implement provider-specific logic here.
+ * Updates {@see Shop::subscription_expires_at} from RevenueCat webhooks
+ * (App Store + Google Play / PLAY_STORE subscriptions flow through RevenueCat).
  */
 class ProcessSubscriptionWebhookPayload implements ShouldQueue
 {
@@ -25,9 +26,8 @@ class ProcessSubscriptionWebhookPayload implements ShouldQueue
         $this->onQueue('default');
     }
 
-    public function handle(): void
+    public function handle(RevenueCatWebhookProcessor $processor): void
     {
-        Log::info('subscription.webhook.received', ['keys' => array_keys($this->payload)]);
-        // TODO: verify signature (REVENUECAT_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET) and map to shops.
+        $processor->processWebhookPayload($this->payload);
     }
 }

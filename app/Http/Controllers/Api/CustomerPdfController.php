@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\Shop;
 use App\Models\Transaction;
+use App\Support\InvoicePdfHelper;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -13,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CustomerPdfController extends Controller
 {
-    private function currencyCodeFromShop(\App\Models\Shop $shop): string
+    private function currencyCodeFromShop(Shop $shop): string
     {
         $c = strtoupper((string) ($shop->primary_currency_code ?? 'MYR'));
 
@@ -30,6 +32,30 @@ class CustomerPdfController extends Controller
         $s = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $s) ?? '';
 
         return Str::limit($s, $max);
+    }
+
+    /**
+     * Split plain text into non-empty trimmed lines for SO-style layouts.
+     *
+     * @return list<string>
+     */
+    private function plainTextLines(?string $blob, int $maxLine = 500): array
+    {
+        $t = trim($this->plainText($blob, $maxLine * 20));
+        if ($t === '') {
+            return [];
+        }
+        $parts = preg_split('/\r\n|\r|\n/', $t) ?: [];
+        $lines = [];
+        foreach ($parts as $p) {
+            $line = trim($p);
+            if ($line === '') {
+                continue;
+            }
+            $lines[] = Str::limit($line, $maxLine);
+        }
+
+        return $lines;
     }
 
     /**
@@ -134,20 +160,44 @@ class CustomerPdfController extends Controller
             : '';
 
         $invoiceNo = sprintf('C%d-T%d', $customer->id, $transaction->id);
+        $tz = (string) config('app.timezone', 'UTC');
+        $docAt = $transaction->created_at?->timezone($tz) ?? now()->timezone($tz);
+        $formatMoney = static fn (int $sen): string => number_format(abs($sen) / 100, 2);
+
+        $txnNote = $this->plainText($transaction->note);
+
+        $itemCode = $itemLabel !== '' ? Str::upper($itemLabel) : '—';
+        $descLines = ['CREDIT RECORDED AGAINST ACCOUNT (TABAR / STOCK ON CREDIT)'];
+        if ($txnNote !== '') {
+            $descLines[] = 'NOTE: '.$txnNote;
+        }
+        $descriptionHtml = implode('<br>', array_map(
+            static fn (string $s) => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            $descLines,
+        ));
 
         return $this->outputPdf('pdf.credit-invoice', [
-            'shopName' => $shop->name,
-            'shopLocation' => $this->plainText($shop->location, 300),
+            'shopName' => (string) $shop->name,
+            'shopLocationLines' => $this->plainTextLines($shop->location, 500),
             'shopContact' => $this->plainText($shop->contact, 120),
-            'paymentInstructions' => $this->plainText($shop->payment_instructions, 500),
+            'paymentInstructionsLines' => $this->plainTextLines($shop->payment_instructions, 520),
             'currencyCode' => $currency,
             'customer' => $customer,
-            'amountFormatted' => $currency.' '.number_format($amountSen / 100, 2),
-            'balanceAfterFormatted' => $currency.' '.number_format($balanceSen / 100, 2),
-            'itemLabel' => $itemLabel,
-            'note' => $this->plainText($transaction->note),
+            'customerRef' => 'C'.$customer->id,
             'invoiceNo' => $invoiceNo,
-            'issuedAt' => now()->timezone((string) config('app.timezone', 'UTC'))->format('Y-m-d H:i'),
+            'docDate' => InvoicePdfHelper::docDateDmY($docAt),
+            'issuedAt' => now()->timezone($tz)->format('Y-m-d H:i'),
+            'itemCode' => $itemCode,
+            'descriptionHtml' => $descriptionHtml !== '' ? $descriptionHtml : 'CREDIT RECORDED AGAINST ACCOUNT',
+            'qtyFormatted' => '1',
+            'uom' => '',
+            'unitPriceFormatted' => $formatMoney($amountSen),
+            'discountFormatted' => $formatMoney(0),
+            'amountFormatted' => $formatMoney($amountSen),
+            'totalDocumentFormatted' => $formatMoney($amountSen),
+            'balanceAfterFormatted' => $formatMoney((int) $balanceSen),
+            'amountWords' => $amountWords,
+            'pageLabel' => '1 OF 1',
         ], 'bakimate-credit-'.$customer->id.'-'.$transaction->id.'.pdf');
     }
 
@@ -176,20 +226,50 @@ class CustomerPdfController extends Controller
         $amountSen = (int) $transaction->amount_sen;
         $balanceSen = (int) $customer->balance_sen;
 
+        $itemLabel = $transaction->item_key !== null && trim((string) $transaction->item_key) !== ''
+            ? $this->plainText((string) $transaction->item_key, 120)
+            : '';
+
         $receiptNo = sprintf('P%d-T%d', $customer->id, $transaction->id);
+        $tz = (string) config('app.timezone', 'UTC');
+        $docAt = $transaction->created_at?->timezone($tz) ?? now()->timezone($tz);
+        $formatMoney = static fn (int $sen): string => number_format(abs($sen) / 100, 2);
+
+        $amountWords = InvoicePdfHelper::amountSenToWordsUpper(abs((int) $amountSen));
+
+        $itemCode = $itemLabel !== '' ? Str::upper($itemLabel) : '—';
+        $txnNote = $this->plainText($transaction->note);
+        $descLines = ['PAYMENT RECEIVED (AGAINST ACCOUNT BALANCE / UDHAAR)'];
+        if ($txnNote !== '') {
+            $descLines[] = 'NOTE: '.$txnNote;
+        }
+        $descriptionHtml = implode('<br>', array_map(
+            static fn (string $s) => htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            $descLines,
+        ));
 
         return $this->outputPdf('pdf.payment-receipt', [
-            'shopName' => $shop->name,
-            'shopLocation' => $this->plainText($shop->location, 300),
+            'shopName' => (string) $shop->name,
+            'shopLocationLines' => $this->plainTextLines($shop->location, 500),
             'shopContact' => $this->plainText($shop->contact, 120),
-            'paymentInstructions' => $this->plainText($shop->payment_instructions, 500),
+            'paymentInstructionsLines' => $this->plainTextLines($shop->payment_instructions, 520),
             'currencyCode' => $currency,
             'customer' => $customer,
-            'amountFormatted' => $currency.' '.number_format($amountSen / 100, 2),
-            'balanceAfterFormatted' => $currency.' '.number_format($balanceSen / 100, 2),
-            'note' => $this->plainText($transaction->note),
+            'customerRef' => 'C'.$customer->id,
             'receiptNo' => $receiptNo,
-            'issuedAt' => now()->timezone((string) config('app.timezone', 'UTC'))->format('Y-m-d H:i'),
+            'docDate' => InvoicePdfHelper::docDateDmY($docAt),
+            'issuedAt' => now()->timezone($tz)->format('Y-m-d H:i'),
+            'itemCode' => $itemCode,
+            'descriptionHtml' => $descriptionHtml !== '' ? $descriptionHtml : 'PAYMENT RECEIVED',
+            'qtyFormatted' => '1',
+            'uom' => '',
+            'unitPriceFormatted' => $formatMoney($amountSen),
+            'discountFormatted' => $formatMoney(0),
+            'amountFormatted' => $formatMoney($amountSen),
+            'totalDocumentFormatted' => $formatMoney($amountSen),
+            'balanceAfterFormatted' => $formatMoney((int) $balanceSen),
+            'amountWords' => $amountWords,
+            'pageLabel' => '1 OF 1',
         ], 'bakimate-payment-'.$customer->id.'-'.$transaction->id.'.pdf');
     }
 }
