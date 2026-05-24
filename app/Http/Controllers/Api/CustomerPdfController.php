@@ -164,6 +164,8 @@ class CustomerPdfController extends Controller
         $docAt = $transaction->created_at?->timezone($tz) ?? now()->timezone($tz);
         $formatMoney = static fn (int $sen): string => number_format(abs($sen) / 100, 2);
 
+        $amountWords = InvoicePdfHelper::amountSenToWordsUpper(abs((int) $amountSen));
+
         $txnNote = $this->plainText($transaction->note);
 
         $itemCode = $itemLabel !== '' ? Str::upper($itemLabel) : '—';
