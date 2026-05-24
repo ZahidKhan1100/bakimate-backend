@@ -61,6 +61,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::post('/customers/{customerId}/balance-public-link', [CustomerController::class, 'rotatePublicBalanceLink']);
 
         Route::post('/transactions', [TransactionController::class, 'store']);
+        Route::patch('/transactions/{transaction}', [TransactionController::class, 'update']);
+        Route::delete('/transactions/{transaction}', [TransactionController::class, 'destroy']);
 
         Route::post('/receipt-scan', ReceiptScanController::class);
 

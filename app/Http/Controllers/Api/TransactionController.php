@@ -5,8 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Actions\Transaction\RecordPaymentOrCreditAction;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreTransactionRequest;
+use App\Http\Requests\UpdateTransactionRequest;
 use App\Models\Customer;
+use App\Models\Transaction;
+use App\Services\BalanceService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class TransactionController extends Controller
 {
@@ -44,5 +48,62 @@ class TransactionController extends Controller
             'transaction' => $transaction,
             'customer' => $customerFresh,
         ], 201);
+    }
+
+    public function update(UpdateTransactionRequest $request, Transaction $transaction, BalanceService $balances): JsonResponse
+    {
+        $user = $request->user();
+        $shopId = (int) $user->shops()->value('id');
+        abort_unless((int) $transaction->shop_id === $shopId && $shopId > 0, 404);
+
+        $validated = $request->validated();
+
+        $itemKeyRaw = isset($validated['item_key']) && $validated['item_key'] !== null && trim((string) $validated['item_key']) !== ''
+            ? trim((string) $validated['item_key'])
+            : null;
+
+        $transaction->amount_sen = (int) $validated['amount_sen'];
+        $transaction->note = $validated['note'] ?? null;
+        $transaction->item_key = $transaction->type === Transaction::TYPE_CREDIT ? $itemKeyRaw : null;
+        $transaction->save();
+
+        /** @var Customer $customer */
+        $customer = Customer::query()
+            ->where('shop_id', $shopId)
+            ->whereKey((int) $transaction->customer_id)
+            ->firstOrFail();
+
+        $balances->syncCachedBalance($customer);
+        $balances->clearReminderFieldsWhenSettled($customer);
+
+        return response()->json([
+            'success' => true,
+            'transaction' => $transaction->fresh(),
+            'customer' => $customer->fresh(),
+        ]);
+    }
+
+    public function destroy(Request $request, Transaction $transaction, BalanceService $balances): JsonResponse
+    {
+        $user = $request->user();
+        $shopId = (int) $user->shops()->value('id');
+        abort_unless((int) $transaction->shop_id === $shopId && $shopId > 0, 404);
+
+        $customerId = (int) $transaction->customer_id;
+        $transaction->delete();
+
+        /** @var Customer $customer */
+        $customer = Customer::query()
+            ->where('shop_id', $shopId)
+            ->whereKey($customerId)
+            ->firstOrFail();
+
+        $balances->syncCachedBalance($customer);
+        $balances->clearReminderFieldsWhenSettled($customer);
+
+        return response()->json([
+            'success' => true,
+            'customer' => $customer->fresh(),
+        ]);
     }
 }

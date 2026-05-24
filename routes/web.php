@@ -13,6 +13,14 @@ Route::get('/v/{token}', PublicCustomerBalanceController::class)
     ->where('token', '[A-Za-z0-9]{40,128}');
 
 /**
+ * HTTPS OAuth redirect bridge for Expo / React Native Google Sign-In.
+ * Google Console "Authorized redirect URIs" must include this URL (same host as APP_URL / API hostname).
+ */
+Route::get('/auth/google/expo-bridge', function () {
+    return view('google.oauth_expo_bridge');
+})->name('google.expo_oauth_bridge');
+
+/**
  * Mobile/API users have no web session; Laravel's EmailVerificationRequest calls $this->user() and 500s when null.
  * Signed URL + explicit user lookup matches the link we send from SendVerificationEmailMailgunAction.
  */

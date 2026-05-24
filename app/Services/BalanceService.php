@@ -50,4 +50,19 @@ class BalanceService
         $customer->balance_sen = $this->recalculateCustomerBalance($customer);
         $customer->save();
     }
+
+    /**
+     * Clears instalment-reminder planner fields once the debtor no longer owes anything.
+     * Matches the post-payment branch in RecordPaymentOrCreditAction.
+     */
+    public function clearReminderFieldsWhenSettled(Customer $customer): void
+    {
+        $customer->refresh();
+        if ($customer->balance_sen <= 0) {
+            $customer->next_due_at = null;
+            $customer->goal_amount_sen = null;
+            $customer->goal_target_date = null;
+            $customer->save();
+        }
+    }
 }
