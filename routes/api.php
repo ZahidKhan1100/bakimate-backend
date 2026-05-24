@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ShopDuitNowQrController;
 use App\Http\Controllers\Api\ShopProfileController;
 use App\Http\Controllers\Api\SubscriptionWebhookController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\SupplierPdfController;
 use App\Http\Controllers\Api\SupplierTransactionController;
 use App\Http\Controllers\Api\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -70,6 +71,9 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::get('/customers/{customerId}/documents/settlement', [CustomerPdfController::class, 'settlement']);
         Route::get('/customers/{customerId}/documents/credit-invoice/{transactionId}', [CustomerPdfController::class, 'creditInvoice']);
         Route::get('/customers/{customerId}/documents/payment-receipt/{transactionId}', [CustomerPdfController::class, 'paymentReceipt']);
+
+        Route::get('/suppliers/{supplierId}/documents/purchase/{transactionId}', [SupplierPdfController::class, 'purchase']);
+        Route::get('/suppliers/{supplierId}/documents/payment-out/{transactionId}', [SupplierPdfController::class, 'paymentOut']);
 
         Route::get('/reports/monthly-statement', MonthlyStatementPdfController::class);
     });
