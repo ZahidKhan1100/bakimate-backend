@@ -58,7 +58,7 @@ class ShopProfileController extends Controller
                 ? $shop->subscription_expires_at->toIso8601String()
                 : null,
             'duitnow_qr_url' => $shop->duitnow_qr_path
-                ? Storage::disk('public')->url($shop->duitnow_qr_path)
+                ? rtrim((string) config('app.url'), '/').'/media/'.$shop->duitnow_qr_path
                 : null,
         ];
     }

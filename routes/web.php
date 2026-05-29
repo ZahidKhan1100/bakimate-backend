@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\PublicCustomerBalanceController;
+use App\Http\Controllers\Web\PublicStorageController;
 use App\Models\User;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Route;
@@ -8,6 +9,16 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', function () {
     return view('welcome');
 });
+
+/** Public disk uploads (DuitNow QR). Not `/storage/*` — Laravel registers its own `storage.local` route there. */
+Route::get('/media/{path}', PublicStorageController::class)->where('path', '.*');
+
+/** Old API URLs used `/storage/duitnow/...` before `/media/` — redirect so existing installs recover after deploy. */
+Route::get('/storage/duitnow/{rest}', function (string $rest) {
+    $path = 'duitnow/'.$rest;
+
+    return redirect('/media/'.$path, 301);
+})->where('rest', '.*');
 
 Route::get('/v/{token}', PublicCustomerBalanceController::class)
     ->where('token', '[A-Za-z0-9]{40,128}');
