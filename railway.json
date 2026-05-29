@@ -9,8 +9,7 @@
     "numReplicas": 1,
     "startCommand": "sh -c \"exec php artisan serve --host=0.0.0.0 --port=${PORT:-8000}\"",
     "preDeployCommand": [
-      "php artisan migrate --force",
-      "php artisan storage:link --force"
+      "sh -c \"php artisan migrate --force && php artisan storage:link --force\""
     ],
     "healthcheckPath": "/up",
     "healthcheckTimeout": 300,
