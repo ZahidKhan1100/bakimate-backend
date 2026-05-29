@@ -38,6 +38,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('/customers', [CustomerController::class, 'index']);
     Route::get('/customers/{customerId}', [CustomerController::class, 'show']);
+    /** Adding customers is free; premium gates recording transactions and other write actions below. */
+    Route::post('/customers', [CustomerController::class, 'store']);
 
     Route::get('/suppliers', [SupplierController::class, 'index']);
     Route::get('/suppliers/{supplierId}', [SupplierController::class, 'show']);
@@ -47,7 +49,6 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/notifications/overdue', OverdueNotificationsController::class);
 
     Route::middleware('subscription')->group(function () {
-        Route::post('/customers', [CustomerController::class, 'store']);
         Route::patch('/customers/{customerId}', [CustomerController::class, 'update']);
         Route::delete('/customers/{customerId}', [CustomerController::class, 'destroy']);
 
