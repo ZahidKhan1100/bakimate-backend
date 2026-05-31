@@ -55,6 +55,22 @@ final class GeminiVoiceLedgerParseService
         $quickJson = json_encode(array_values($quickItems), JSON_UNESCAPED_UNICODE) ?: '[]';
         $summaryLang = str_starts_with(strtolower($appLanguage), 'ms') ? 'Malay (Bahasa Malaysia)' : 'English';
 
+        $paymentBlock = $intentHint === 'payment'
+            ? <<<'PAY'
+
+PAYMENT MODE (intent_hint is "payment" — customer paid / wusool / received money):
+- ALWAYS set "type" to "payment".
+- NEVER set item_key or next_due_at (always null).
+- Amount-only utterances are common: "teen sau wusool", "paid five hundred", "bayar tiga ratus", "got paid 300", "liya panch sau".
+- Payment words: wusool, wasool, paid, payment, received, bayar, terima, liya, mila, cash, collect — do NOT treat these as credit/udhaar.
+- summary should describe payment received (e.g. "RM 300 payment received"), not goods sold.
+PAY
+            : '';
+
+        $creditItemLine = $intentHint === 'credit'
+            ? '- "item_key": string or null — pick the closest label from the shop list when the user says what they sold. Must match a list entry exactly.'
+            : '- "item_key": always null (not a credit entry).';
+
         $prompt = <<<PROMPT
 You parse spoken shop-ledger commands for a small retail app (udhaar / credit and customer payments).
 The shopkeeper spoke in any language (Urdu, Pashto, Malay, English, Roman Urdu, etc.). The transcript may be imperfect STT text.
@@ -64,15 +80,16 @@ Context:
 - Ledger currency code: {$currencyCode}
 - Customer name: {$customerName}
 - User opened the sheet for intent_hint: "{$intentHint}" (credit = gave goods on credit / udhaar; payment = customer paid money)
-- Shop "what did you sell?" labels (item_key MUST be copied character-for-character from this list when a product is named): {$quickJson}
-- Write "summary" in {$summaryLang} (one short line for confirm UI; include the sold item name when known).
+- Shop "what did you sell?" labels (credit only): {$quickJson}
+- Write "summary" in {$summaryLang} (one short line for confirm UI).
+{$paymentBlock}
 
 Return ONLY valid JSON (no markdown) with exactly these keys:
-- "type": "credit" or "payment" (prefer intent_hint unless transcript clearly means the opposite; then use transcript and set confidence "low")
+- "type": "credit" or "payment" (when intent_hint is "payment", type MUST be "payment")
 - "amount_sen": integer smallest currency units (e.g. MYR/PKR/USD: major * 100; JPY/KRW: major amount as integer with no extra *100)
-- "note": string or null (extra context only, max 120 chars; do not duplicate the quick item label here if item_key is set)
-- "next_due_at": "YYYY-MM-DD" or null (instalment / due hints like "next week", "7 days")
-- "item_key": string or null — for credit/udhaar: pick the closest label from the shop list when the user says what they sold (e.g. rice/beras/chawal → "Rice" if that label exists). Must match a list entry exactly.
+- "note": string or null (extra context only, max 120 chars)
+- "next_due_at": "YYYY-MM-DD" or null (credit instalment hints only; null for payment)
+{$creditItemLine}
 - "confidence": "high", "medium", or "low"
 - "summary": one short confirm line in {$summaryLang}
 
@@ -101,7 +118,7 @@ PROMPT;
             $lastResponse = $resp;
 
             if ($resp->successful()) {
-                return $this->parseSuccessfulResponse($resp->json(), $intentHint, $quickItems, $transcript);
+                return $this->parseSuccessfulResponse($resp->json(), $intentHint, $quickItems, $transcript, $currencyCode);
             }
 
             $errMsg = strtolower((string) ($resp->json('error.message') ?? ''));
@@ -141,8 +158,13 @@ PROMPT;
      *     error: ?string
      * }
      */
-    private function parseSuccessfulResponse(?array $json, string $intentHint, array $quickItems, string $transcript): array
-    {
+    private function parseSuccessfulResponse(
+        ?array $json,
+        string $intentHint,
+        array $quickItems,
+        string $transcript,
+        string $currencyCode,
+    ): array {
         if ($json === null) {
             return $this->emptyResult('gemini_request_failed');
         }
@@ -198,7 +220,17 @@ PROMPT;
         $rawItemKey = isset($parsed['item_key']) && is_string($parsed['item_key'])
             ? trim($parsed['item_key'])
             : null;
-        $itemKey = $this->resolveQuickItemKey($rawItemKey, $note, $transcript, $quickItems);
+        $itemKey = $intentHint === 'payment'
+            ? null
+            : $this->resolveQuickItemKey($rawItemKey, $note, $transcript, $quickItems);
+
+        if ($intentHint === 'payment') {
+            $type = 'payment';
+            $nextDue = null;
+            if ($sen === null) {
+                $sen = $this->extractAmountSenFromTranscript($transcript, $currencyCode);
+            }
+        }
 
         $confidence = 'low';
         if (isset($parsed['confidence']) && is_string($parsed['confidence'])) {
@@ -209,6 +241,8 @@ PROMPT;
         }
         if ($sen === null) {
             $confidence = 'low';
+        } elseif ($intentHint === 'payment' && $confidence === 'low' && $this->transcriptLooksLikePayment($transcript)) {
+            $confidence = 'medium';
         }
 
         $summary = null;
@@ -358,5 +392,45 @@ PROMPT;
         $decoded = json_decode($trimmed, true);
 
         return is_array($decoded) ? $decoded : null;
+    }
+
+    private function transcriptLooksLikePayment(string $transcript): bool
+    {
+        return (bool) preg_match(
+            '/\b(wusool|wasool|received|payment|paid|bayar|terima|liya|mila|got paid|cash in|collect)\b/i',
+            $transcript,
+        );
+    }
+
+    private function extractAmountSenFromTranscript(string $transcript, string $currencyCode): ?int
+    {
+        $t = mb_strtolower(trim($transcript));
+        if ($t === '') {
+            return null;
+        }
+
+        if (preg_match('/\b(?:teen|3)\s*sau\b/u', $t) === 1) {
+            return 30000;
+        }
+
+        if (preg_match('/\b(\d{1,4})\s*sau\b/u', $t, $m) === 1) {
+            $hundreds = (int) $m[1];
+            if ($hundreds > 0 && $hundreds < 10_000) {
+                return $hundreds * 10_000;
+            }
+        }
+
+        if (preg_match('/(\d{1,7}(?:[.,]\d{1,2})?)/', $t, $m) === 1) {
+            $major = (float) str_replace(',', '.', $m[1]);
+            if ($major > 0) {
+                $code = strtoupper(trim($currencyCode));
+
+                return $code === 'JPY' || $code === 'KRW'
+                    ? (int) round($major)
+                    : (int) round($major * 100);
+            }
+        }
+
+        return null;
     }
 }
