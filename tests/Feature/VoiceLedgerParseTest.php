@@ -107,6 +107,54 @@ class VoiceLedgerParseTest extends TestCase
         $response->assertStatus(422);
     }
 
+    public function test_voice_ledger_parse_resolves_quick_item_case_insensitive(): void
+    {
+        $user = User::factory()->create();
+        Shop::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Test Shop',
+            'primary_currency_code' => 'MYR',
+            'subscription_expires_at' => now()->addDays(7),
+            'credit_quick_items' => ['Rice', 'Oil'],
+        ]);
+
+        Sanctum::actingAs($user);
+
+        Http::fake([
+            'generativelanguage.googleapis.com/*' => Http::response([
+                'candidates' => [[
+                    'content' => [
+                        'parts' => [[
+                            'text' => json_encode([
+                                'type' => 'credit',
+                                'amount_sen' => 30000,
+                                'note' => null,
+                                'next_due_at' => null,
+                                'item_key' => 'rice',
+                                'confidence' => 'high',
+                                'summary' => 'RM 300 credit — Rice',
+                            ], JSON_THROW_ON_ERROR),
+                        ]],
+                    ],
+                ]],
+            ], 200),
+        ]);
+
+        $response = $this->postJson('/api/voice-ledger-parse', [
+            'transcript' => 'udhaar teen sau chawal',
+            'intent_hint' => 'credit',
+            'currency_code' => 'MYR',
+            'customer_name' => 'Ali',
+            'quick_items' => ['Rice', 'Oil'],
+            'app_language' => 'en',
+        ]);
+
+        $response->assertOk()->assertJson([
+            'item_key' => 'Rice',
+            'amount_sen' => 30000,
+        ]);
+    }
+
     public function test_voice_ledger_parse_when_gemini_not_configured(): void
     {
         config(['services.gemini.api_key' => '']);

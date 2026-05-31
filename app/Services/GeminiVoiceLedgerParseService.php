@@ -64,15 +64,15 @@ Context:
 - Ledger currency code: {$currencyCode}
 - Customer name: {$customerName}
 - User opened the sheet for intent_hint: "{$intentHint}" (credit = gave goods on credit / udhaar; payment = customer paid money)
-- Shop quick item labels (match item_key exactly if mentioned): {$quickJson}
-- Write "summary" in {$summaryLang} (one short line for confirm UI).
+- Shop "what did you sell?" labels (item_key MUST be copied character-for-character from this list when a product is named): {$quickJson}
+- Write "summary" in {$summaryLang} (one short line for confirm UI; include the sold item name when known).
 
 Return ONLY valid JSON (no markdown) with exactly these keys:
 - "type": "credit" or "payment" (prefer intent_hint unless transcript clearly means the opposite; then use transcript and set confidence "low")
 - "amount_sen": integer smallest currency units (e.g. MYR/PKR/USD: major * 100; JPY/KRW: major amount as integer with no extra *100)
-- "note": string or null (item/context, max 120 chars)
+- "note": string or null (extra context only, max 120 chars; do not duplicate the quick item label here if item_key is set)
 - "next_due_at": "YYYY-MM-DD" or null (instalment / due hints like "next week", "7 days")
-- "item_key": string or null (must be one of the quick item labels if a product is named)
+- "item_key": string or null — for credit/udhaar: pick the closest label from the shop list when the user says what they sold (e.g. rice/beras/chawal → "Rice" if that label exists). Must match a list entry exactly.
 - "confidence": "high", "medium", or "low"
 - "summary": one short confirm line in {$summaryLang}
 
@@ -101,7 +101,7 @@ PROMPT;
             $lastResponse = $resp;
 
             if ($resp->successful()) {
-                return $this->parseSuccessfulResponse($resp->json(), $intentHint, $quickItems);
+                return $this->parseSuccessfulResponse($resp->json(), $intentHint, $quickItems, $transcript);
             }
 
             $errMsg = strtolower((string) ($resp->json('error.message') ?? ''));
@@ -141,7 +141,7 @@ PROMPT;
      *     error: ?string
      * }
      */
-    private function parseSuccessfulResponse(?array $json, string $intentHint, array $quickItems): array
+    private function parseSuccessfulResponse(?array $json, string $intentHint, array $quickItems, string $transcript): array
     {
         if ($json === null) {
             return $this->emptyResult('gemini_request_failed');
@@ -195,13 +195,10 @@ PROMPT;
             $nextDue = preg_match('/^\d{4}-\d{2}-\d{2}$/', $d) === 1 ? $d : null;
         }
 
-        $itemKey = null;
-        if (isset($parsed['item_key']) && is_string($parsed['item_key'])) {
-            $ik = trim($parsed['item_key']);
-            if ($ik !== '' && in_array($ik, $quickItems, true)) {
-                $itemKey = $ik;
-            }
-        }
+        $rawItemKey = isset($parsed['item_key']) && is_string($parsed['item_key'])
+            ? trim($parsed['item_key'])
+            : null;
+        $itemKey = $this->resolveQuickItemKey($rawItemKey, $note, $transcript, $quickItems);
 
         $confidence = 'low';
         if (isset($parsed['confidence']) && is_string($parsed['confidence'])) {
@@ -307,6 +304,45 @@ PROMPT;
         $text = $parts[0]['text'] ?? null;
 
         return is_string($text) ? $text : null;
+    }
+
+    /**
+     * Map Gemini / spoken product names to a shop quick-item label.
+     *
+     * @param  list<string>  $quickItems
+     */
+    private function resolveQuickItemKey(?string $fromModel, ?string $note, string $transcript, array $quickItems): ?string
+    {
+        if ($quickItems === []) {
+            return null;
+        }
+
+        $candidates = array_filter([
+            $fromModel !== null && $fromModel !== '' ? $fromModel : null,
+            $note,
+            $transcript,
+        ]);
+
+        foreach ($quickItems as $label) {
+            if ($fromModel !== null && strcasecmp($fromModel, $label) === 0) {
+                return $label;
+            }
+        }
+
+        foreach ($candidates as $text) {
+            $lower = mb_strtolower($text);
+            foreach ($quickItems as $label) {
+                $labelLower = mb_strtolower($label);
+                if ($labelLower === '') {
+                    continue;
+                }
+                if (str_contains($lower, $labelLower)) {
+                    return $label;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**
