@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\InsightsController;
 use App\Http\Controllers\Api\MonthlyStatementPdfController;
 use App\Http\Controllers\Api\OverdueNotificationsController;
 use App\Http\Controllers\Api\ReceiptScanController;
+use App\Http\Controllers\Api\VoiceLedgerParseController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ShopDuitNowQrController;
 use App\Http\Controllers\Api\ShopProfileController;
@@ -67,6 +68,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
         Route::delete('/transactions/{transaction}', [TransactionController::class, 'destroy']);
 
         Route::post('/receipt-scan', ReceiptScanController::class);
+        Route::post('/voice-ledger-parse', VoiceLedgerParseController::class)
+            ->middleware('throttle:30,1');
 
         Route::get('/customers/{customerId}/documents/ledger', [CustomerPdfController::class, 'ledger']);
         Route::get('/customers/{customerId}/documents/settlement', [CustomerPdfController::class, 'settlement']);
