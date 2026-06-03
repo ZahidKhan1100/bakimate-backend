@@ -17,6 +17,7 @@ class SupplierTransactionController extends Controller
             'amount_sen' => (int) $v['amount_sen'],
             'type' => (string) $v['type'],
             'note' => $v['note'] ?? null,
+            'recorded_at' => $v['recorded_at'] ?? null,
         ]);
 
         return response()->json($tx, 201);

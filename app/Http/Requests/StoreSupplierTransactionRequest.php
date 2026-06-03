@@ -23,6 +23,8 @@ class StoreSupplierTransactionRequest extends FormRequest
             'amount_sen' => ['required', 'integer', 'min:1', 'max:1000000000'],
             'type' => ['required', 'string', Rule::in(SupplierTransaction::TYPES)],
             'note' => ['nullable', 'string', 'max:8000'],
+            /** When the purchase/payment happened (date only). Defaults to now if omitted. */
+            'recorded_at' => ['nullable', 'date'],
         ];
     }
 }

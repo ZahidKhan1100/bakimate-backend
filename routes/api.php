@@ -45,6 +45,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('/suppliers', [SupplierController::class, 'index']);
     Route::get('/suppliers/{supplierId}', [SupplierController::class, 'show']);
+    Route::get('/suppliers/{supplierId}/transactions', [SupplierController::class, 'transactions']);
 
     Route::get('/reports/summary', [ReportController::class, 'summary']);
     Route::get('/reports/insights', InsightsController::class);

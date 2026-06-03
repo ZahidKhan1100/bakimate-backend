@@ -10,6 +10,7 @@ use App\Http\Requests\StoreSupplierRequest;
 use App\Http\Requests\UpdateSupplierRequest;
 use App\Models\Supplier;
 use App\Models\SupplierTransaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -53,6 +54,58 @@ class SupplierController extends Controller
         return response()->json([
             ...$supplier->toArray(),
             'recent_transactions' => $recent,
+        ]);
+    }
+
+    public function transactions(Request $request, int $supplierId): JsonResponse
+    {
+        $shop = $request->user()?->shops()->firstOrFail();
+        $supplier = Supplier::query()
+            ->where('shop_id', $shop->id)
+            ->whereKey($supplierId)
+            ->firstOrFail();
+
+        $month = $request->query('month');
+        $query = SupplierTransaction::query()
+            ->where('shop_id', $shop->id)
+            ->where('supplier_id', $supplier->id);
+
+        if (is_string($month) && preg_match('/^\d{4}-\d{2}$/', $month) === 1) {
+            $tz = (string) config('app.timezone', 'UTC');
+            $start = CarbonImmutable::parse($month.'-01', $tz)->startOfMonth();
+            $end = $start->endOfMonth();
+            $query->whereBetween('created_at', [$start, $end]);
+        }
+
+        $rows = $query
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get();
+
+        $purchases = 0;
+        $payments = 0;
+        foreach ($rows as $t) {
+            if ($t->type === SupplierTransaction::TYPE_PURCHASE) {
+                $purchases += (int) $t->amount_sen;
+            } elseif ($t->type === SupplierTransaction::TYPE_PAYMENT_OUT) {
+                $payments += (int) $t->amount_sen;
+            }
+        }
+
+        return response()->json([
+            'supplier_id' => $supplier->id,
+            'month' => is_string($month) && $month !== '' ? $month : null,
+            'transactions' => $rows->map(fn (SupplierTransaction $t) => [
+                'id' => $t->id,
+                'amount_sen' => (int) $t->amount_sen,
+                'type' => $t->type,
+                'note' => $t->note,
+                'created_at' => $t->created_at !== null ? $t->created_at->toIso8601String() : null,
+            ])->values()->all(),
+            'totals' => [
+                'purchases_sen' => $purchases,
+                'payments_out_sen' => $payments,
+            ],
         ]);
     }
 
