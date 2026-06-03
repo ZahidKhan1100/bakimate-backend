@@ -11,6 +11,7 @@ use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\Customer;
 use App\Models\CustomerPromise;
 use App\Models\Transaction;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -65,6 +66,59 @@ class CustomerController extends Controller
                 ->all(),
             'recent_transactions' => $recentTransactions,
         ]));
+    }
+
+    public function transactions(Request $request, int $customerId): JsonResponse
+    {
+        $shop = $request->user()?->shops()->firstOrFail();
+        $customer = Customer::query()
+            ->where('shop_id', $shop->id)
+            ->whereKey($customerId)
+            ->firstOrFail();
+
+        $month = $request->query('month');
+        $query = Transaction::query()
+            ->where('shop_id', $shop->id)
+            ->where('customer_id', $customer->id);
+
+        if (is_string($month) && preg_match('/^\d{4}-\d{2}$/', $month) === 1) {
+            $tz = (string) config('app.timezone', 'UTC');
+            $start = CarbonImmutable::parse($month.'-01', $tz)->startOfMonth();
+            $end = $start->endOfMonth();
+            $query->whereBetween('created_at', [$start, $end]);
+        }
+
+        $rows = $query
+            ->orderByDesc('created_at')
+            ->limit(500)
+            ->get();
+
+        $credit = 0;
+        $payments = 0;
+        foreach ($rows as $t) {
+            if ($t->type === Transaction::TYPE_CREDIT) {
+                $credit += (int) $t->amount_sen;
+            } elseif ($t->type === Transaction::TYPE_PAYMENT) {
+                $payments += (int) $t->amount_sen;
+            }
+        }
+
+        return response()->json([
+            'customer_id' => $customer->id,
+            'month' => is_string($month) && $month !== '' ? $month : null,
+            'transactions' => $rows->map(fn (Transaction $t) => [
+                'id' => $t->id,
+                'amount_sen' => (int) $t->amount_sen,
+                'type' => $t->type,
+                'note' => $t->note,
+                'item_key' => $t->item_key,
+                'created_at' => $t->created_at !== null ? $t->created_at->toIso8601String() : null,
+            ])->values()->all(),
+            'totals' => [
+                'credit_given_sen' => $credit,
+                'payments_collected_sen' => $payments,
+            ],
+        ]);
     }
 
     public function store(StoreCustomerRequest $request, CreateCustomerAction $action): JsonResponse

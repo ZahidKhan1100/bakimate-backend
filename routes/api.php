@@ -39,6 +39,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('/customers', [CustomerController::class, 'index']);
     Route::get('/customers/{customerId}', [CustomerController::class, 'show']);
+    Route::get('/customers/{customerId}/transactions', [CustomerController::class, 'transactions']);
     /** Adding customers is free; premium gates recording transactions and other write actions below. */
     Route::post('/customers', [CustomerController::class, 'store']);
 

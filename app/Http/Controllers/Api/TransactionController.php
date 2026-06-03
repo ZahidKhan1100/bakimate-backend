@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateTransactionRequest;
 use App\Models\Customer;
 use App\Models\Transaction;
 use App\Services\BalanceService;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -65,6 +66,13 @@ class TransactionController extends Controller
         $transaction->amount_sen = (int) $validated['amount_sen'];
         $transaction->note = $validated['note'] ?? null;
         $transaction->item_key = $transaction->type === Transaction::TYPE_CREDIT ? $itemKeyRaw : null;
+
+        if (array_key_exists('recorded_at', $validated) && $validated['recorded_at'] !== null) {
+            $at = CarbonImmutable::parse((string) $validated['recorded_at'])->startOfDay();
+            $transaction->created_at = $at;
+            $transaction->updated_at = $at;
+        }
+
         $transaction->save();
 
         /** @var Customer $customer */

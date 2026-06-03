@@ -7,6 +7,7 @@ use App\Models\Shop;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\BalanceService;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
 class RecordPaymentOrCreditAction
@@ -44,7 +45,11 @@ class RecordPaymentOrCreditAction
                 ? trim((string) $data['item_key'])
                 : null;
 
-            $transaction = Transaction::query()->create([
+            $recordedAt = isset($data['recorded_at']) && $data['recorded_at'] !== null && $data['recorded_at'] !== ''
+                ? CarbonImmutable::parse((string) $data['recorded_at'])->startOfDay()
+                : null;
+
+            $transaction = new Transaction([
                 'shop_id' => $shop->id,
                 'customer_id' => $customer->id,
                 'amount_sen' => $data['amount_sen'],
@@ -52,6 +57,13 @@ class RecordPaymentOrCreditAction
                 'note' => $data['note'] ?? null,
                 'item_key' => $itemKey,
             ]);
+
+            if ($recordedAt !== null) {
+                $transaction->created_at = $recordedAt;
+                $transaction->updated_at = $recordedAt;
+            }
+
+            $transaction->save();
 
             $this->balances->syncCachedBalance($customer->fresh());
 

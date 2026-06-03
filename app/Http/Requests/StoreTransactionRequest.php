@@ -36,6 +36,8 @@ class StoreTransactionRequest extends FormRequest
             'goal_target_date' => ['nullable', 'date'],
             /** Optional; meaningful for credit (“Gave”). Stored on the customer row. Date only (YYYY-MM-DD). */
             'next_due_at' => ['nullable', 'date'],
+            /** When the credit/payment happened (date only). Defaults to now if omitted. */
+            'recorded_at' => ['nullable', 'date'],
         ];
     }
 }

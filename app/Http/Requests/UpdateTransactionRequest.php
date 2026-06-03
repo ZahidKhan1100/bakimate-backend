@@ -21,6 +21,7 @@ class UpdateTransactionRequest extends FormRequest
             'note' => ['nullable', 'string', 'max:2000'],
             /** Quick-item tag; meaningful for credit rows — ignored server-side for payments. */
             'item_key' => ['nullable', 'string', 'max:80'],
+            'recorded_at' => ['nullable', 'date'],
         ];
     }
 }
