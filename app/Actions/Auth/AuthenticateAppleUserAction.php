@@ -64,7 +64,7 @@ class AuthenticateAppleUserAction
                 'user_id' => $user->id,
                 'name' => 'My Shop',
                 'primary_currency_code' => 'MYR',
-                'subscription_expires_at' => now()->addDays(30),
+                'subscription_expires_at' => now()->addDays(90),
                 'credit_quick_items' => Shop::DEFAULT_CREDIT_QUICK_ITEMS,
             ]);
 

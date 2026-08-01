@@ -42,7 +42,7 @@ class CustomerController extends Controller
             ->where('shop_id', $shop->id)
             ->where('customer_id', $customer->id)
             ->orderByDesc('created_at')
-            ->limit(100)
+            ->limit(3)
             ->get()
             ->map(fn (Transaction $t) => [
                 'id' => $t->id,
