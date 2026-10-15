@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Web\PasswordResetPageController;
 use App\Http\Controllers\Web\PublicCustomerBalanceController;
 use App\Http\Controllers\Web\PublicStorageController;
 use App\Models\User;
@@ -22,6 +23,17 @@ Route::get('/storage/duitnow/{rest}', function (string $rest) {
 
 Route::get('/v/{token}', PublicCustomerBalanceController::class)
     ->where('token', '[A-Za-z0-9]{40,128}');
+
+/**
+ * Password reset email lands here (https). Email apps won't open bakimate:// links directly, so this page
+ * offers "Open in BakiMate" plus a web form fallback. Named password.reset for Laravel's notification.
+ */
+Route::get('/reset-password/{token}', [PasswordResetPageController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->name('password.reset');
+Route::post('/reset-password', [PasswordResetPageController::class, 'update'])
+    ->middleware('throttle:8,1')
+    ->name('password.update.web');
 
 /**
  * HTTPS OAuth redirect bridge for Expo / React Native Google Sign-In.

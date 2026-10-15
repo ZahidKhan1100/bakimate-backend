@@ -20,15 +20,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        /** https link: email apps don't open bakimate:// links. The page hands off to the app or resets on the web. */
         ResetPassword::createUrlUsing(function (object $notifiable, string $token): string {
-            $scheme = config('bakimate.password_reset_app_scheme', 'bakimate');
-            $path = config('bakimate.password_reset_app_path', 'reset-password');
-            $email = $notifiable->getEmailForPasswordReset();
-
-            return sprintf('%s://%s?%s', $scheme, $path, http_build_query([
+            return route('password.reset', [
                 'token' => $token,
-                'email' => $email,
-            ]));
+                'email' => $notifiable->getEmailForPasswordReset(),
+            ]);
         });
     }
 }

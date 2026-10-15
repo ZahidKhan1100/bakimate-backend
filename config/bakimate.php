@@ -29,4 +29,11 @@ return [
      * This blade forwards search + hash to the app deep link below.
      */
     'google_expo_oauth_deep_link' => env('GOOGLE_EXPO_OAUTH_DEEP_LINK', 'bakimate://oauthredirect'),
+
+    /**
+     * When false, every shop is treated as subscribed: the `subscription` middleware lets all
+     * requests through and GET /shop reports subscription_active=true (so the app shows no ads).
+     * Growth phase default; set BAKIMATE_SUBSCRIPTIONS_ENABLED=true to re-enable paid plans.
+     */
+    'subscriptions_enabled' => filter_var(env('BAKIMATE_SUBSCRIPTIONS_ENABLED', false), FILTER_VALIDATE_BOOLEAN),
 ];

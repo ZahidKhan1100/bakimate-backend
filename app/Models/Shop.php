@@ -56,6 +56,10 @@ class Shop extends Model
 
     public function subscriptionActive(?\DateTimeInterface $at = null): bool
     {
+        if (! config('bakimate.subscriptions_enabled')) {
+            return true;
+        }
+
         if ($this->subscription_expires_at === null) {
             return false;
         }
