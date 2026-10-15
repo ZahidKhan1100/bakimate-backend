@@ -17,6 +17,7 @@ use App\Http\Requests\ResetPasswordRequest;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 
@@ -80,6 +81,11 @@ class AuthController extends Controller
         }
 
         if (! $user->hasVerifiedEmail()) {
+            /** The verify screen says "check your inbox", so make sure something is in it (at most every 2 minutes). */
+            if (Cache::add('verify-email-sent:'.$user->id, true, now()->addMinutes(2))) {
+                $this->sendVerificationEmailMailgun->execute($user);
+            }
+
             return response()->json([
                 'message' => 'Please verify your email address first. Check your inbox for the verification link.',
                 'email_verified' => false,
@@ -136,7 +142,10 @@ class AuthController extends Controller
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user, string $password): void {
-                $user->forceFill(['password' => $password])->save();
+                $user->forceFill(['password' => $password]);
+                /** The reset link came to this inbox, so the address is proven — no separate verification needed. */
+                $user->email_verified_at ??= now();
+                $user->save();
             }
         );
 

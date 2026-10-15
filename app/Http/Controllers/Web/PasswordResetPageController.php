@@ -40,7 +40,10 @@ class PasswordResetPageController extends Controller
         $status = Password::reset(
             $data + ['password_confirmation' => $request->input('password_confirmation')],
             function (User $user, string $password): void {
-                $user->forceFill(['password' => $password])->save();
+                $user->forceFill(['password' => $password]);
+                /** The reset link came to this inbox, so the address is proven — no separate verification needed. */
+                $user->email_verified_at ??= now();
+                $user->save();
             }
         );
 

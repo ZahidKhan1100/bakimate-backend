@@ -8,12 +8,13 @@ if (! function_exists('sendMailgunEmail')) {
      */
     function sendMailgunEmail(string $to, string $subject, string $html, ?string $text = null): bool
     {
-        $domain = trim((string) env('MAILGUN_DOMAIN'));
-        $apiKey = trim((string) env('MAILGUN_SECRET'));
-        $from = trim((string) env('MAIL_FROM_ADDRESS', 'noreply@example.com'));
-        $fromName = trim((string) env('MAIL_FROM_NAME', config('app.name', 'BakiMate')));
+        /** Read config(), not env(): env() returns null once `php artisan config:cache` has run in production. */
+        $domain = trim((string) config('services.mailgun.domain'));
+        $apiKey = trim((string) config('services.mailgun.secret'));
+        $from = trim((string) config('mail.from.address', 'noreply@example.com'));
+        $fromName = trim((string) config('mail.from.name', config('app.name', 'BakiMate')));
 
-        $host = preg_replace('#^https?://#i', '', trim((string) env('MAILGUN_ENDPOINT', 'api.mailgun.net')));
+        $host = preg_replace('#^https?://#i', '', trim((string) config('services.mailgun.endpoint', 'api.mailgun.net')));
         if ($host === '') {
             $host = 'api.mailgun.net';
         }
